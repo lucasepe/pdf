@@ -1,0 +1,38 @@
+
+
+                         .----------------------.
+                         | Repository rules     |
+                         |   AGENTS.md          |
+                         |   engineering/*.md   |
+                         '----------------------'
+                                    |
+                                    v
+                         .----------------------.
+                         | Module context       |
+                         |   services/billing/  |
+                         |   CONTEXT.md         |
+                         '----------------------'
+                                    |
+                                    v
+                     .------------------------------.
+                     | Selected decisions           |
+                     |   ADRs relevant to this task |
+                     '------------------------------'
+                                    |
+                                    v
+                   .---------------------------------.
+                   | Repository evidence             |
+                   |   local code, tests, migrations |
+                   '---------------------------------'
+                                    |
+                                    v
+                 .-------------------------------------.
+                 | Verification plan                   |
+                 |   commands, checks, review evidence |
+                 '-------------------------------------'
+                                    |
+                                    v
+                .---------------------------------------.
+                | Bounded agent work                    |
+                |   one task, clear scope, known checks |
+                '---------------------------------------'
