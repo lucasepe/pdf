@@ -1,8 +1,7 @@
 # pdf
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/lucasepe/pdf.svg)](https://pkg.go.dev/github.com/lucasepe/pdf)
-[![Go Report Card](https://goreportcard.com/badge/github.com/lucasepe/pdf)](https://goreportcard.com/report/github.com/lucasepe/pdf)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: BSD-2](https://img.shields.io/badge/License-BSD-2-blue.svg)](./LICENSE)
 
 `pdf` is a compact, pure Go PDF generation library with a drawing API inspired by `fogleman/gg` and document layout primitives for paginated content. It writes PDF directly: no LaTeX executable, cgo, browser, or platform PDF framework is
 required.
