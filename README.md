@@ -190,6 +190,18 @@ if err := flow.Error(); err != nil {
 }
 ```
 
+Paragraphs also support ordinary and hanging indents. A list marker can remain
+outside the continuation text column by combining `LeftIndent` with the
+opposite `FirstLineIndent`:
+
+```go
+flow.DrawParagraph(runs, pdf.ParagraphStyle{
+    LineHeight:      14,
+    LeftIndent:      18,
+    FirstLineIndent: -18,
+})
+```
+
 The layout layer is backend-neutral: it does not parse Markdown and leaves
 tables and other block semantics to higher-level renderers.
 

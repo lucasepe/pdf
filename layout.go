@@ -126,10 +126,16 @@ const (
 
 // ParagraphStyle controls paragraph geometry. LineHeight is an absolute point
 // value; zero chooses 1.3 times the largest font on each line.
+//
+// LeftIndent moves every line in from the body's left edge. FirstLineIndent is
+// an additional offset applied only to the first line and may be negative. A
+// hanging indent therefore uses a positive LeftIndent and the corresponding
+// negative FirstLineIndent.
 type ParagraphStyle struct {
 	Align                   TextAlign
 	LineHeight              float64
 	SpaceBefore, SpaceAfter float64
+	LeftIndent              float64
 	FirstLineIndent         float64
 }
 
@@ -334,7 +340,7 @@ func (f *Flow) DrawParagraph(runs []TextRun, style ParagraphStyle) *Flow {
 	if f.err != nil {
 		return f
 	}
-	if style.Align > AlignRight || !finite(style.LineHeight, style.SpaceBefore, style.SpaceAfter, style.FirstLineIndent) || style.LineHeight < 0 || style.SpaceBefore < 0 || style.SpaceAfter < 0 || style.FirstLineIndent < 0 || style.FirstLineIndent >= f.body.Width {
+	if !validParagraphStyle(style, f.body.Width) {
 		return f.fail("paragraph", "invalid paragraph geometry or alignment")
 	}
 	lines := f.breakLines(runs, style)
@@ -353,9 +359,9 @@ func (f *Flow) DrawParagraph(runs []TextRun, style ParagraphStyle) *Flow {
 		if f.err != nil {
 			return f
 		}
-		indent := 0.0
+		indent := style.LeftIndent
 		if i == 0 {
-			indent = style.FirstLineIndent
+			indent += style.FirstLineIndent
 		}
 		available := f.body.Width - indent
 		x := f.body.X + indent
@@ -403,6 +409,25 @@ func (f *Flow) DrawParagraph(runs []TextRun, style ParagraphStyle) *Flow {
 
 func (f *Flow) breakLines(runs []TextRun, paragraph ParagraphStyle) []flowLine {
 	return f.breakLinesWidth(runs, paragraph, f.body.Width)
+}
+
+func validParagraphStyle(style ParagraphStyle, width float64) bool {
+	if style.Align > AlignRight ||
+		!finite(style.LineHeight, style.SpaceBefore, style.SpaceAfter, style.LeftIndent, style.FirstLineIndent) ||
+		style.LineHeight < 0 || style.SpaceBefore < 0 || style.SpaceAfter < 0 ||
+		style.LeftIndent < 0 || style.LeftIndent >= width {
+		return false
+	}
+	firstIndent := style.LeftIndent + style.FirstLineIndent
+	return firstIndent >= 0 && firstIndent < width
+}
+
+func paragraphLineWidth(width float64, paragraph ParagraphStyle, first bool) float64 {
+	indent := paragraph.LeftIndent
+	if first {
+		indent += paragraph.FirstLineIndent
+	}
+	return width - indent
 }
 
 func (f *Flow) breakLinesWidth(runs []TextRun, paragraph ParagraphStyle, width float64) []flowLine {
@@ -467,10 +492,7 @@ func (f *Flow) breakLinesWidth(runs []TextRun, paragraph ParagraphStyle, width f
 			flush(true)
 			continue
 		}
-		limit := width
-		if first {
-			limit -= paragraph.FirstLineIndent
-		}
+		limit := paragraphLineWidth(width, paragraph, first)
 		if token.space {
 			if len(line.tokens) > 0 || token.style.wrap == WrapCode {
 				line.tokens = append(line.tokens, token)
@@ -482,7 +504,7 @@ func (f *Flow) breakLinesWidth(runs []TextRun, paragraph ParagraphStyle, width f
 		if token.width > limit+0.001 {
 			if len(trimTrailingSpaces(line).tokens) > 0 {
 				flush(false)
-				limit = width
+				limit = paragraphLineWidth(width, paragraph, false)
 			}
 			pieces := f.splitToken(token, limit)
 			if f.err != nil {
@@ -501,7 +523,7 @@ func (f *Flow) breakLinesWidth(runs []TextRun, paragraph ParagraphStyle, width f
 		candidate := line.width + token.width
 		if candidate > limit+0.001 && len(trimTrailingSpaces(line).tokens) > 0 {
 			flush(false)
-			limit = width
+			limit = paragraphLineWidth(width, paragraph, false)
 		}
 		line.tokens = append(line.tokens, token)
 		line.width += token.width

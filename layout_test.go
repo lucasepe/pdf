@@ -67,6 +67,80 @@ func TestFlowBreaksMixedRunsAndLongTokensWithinBody(t *testing.T) {
 	}
 }
 
+func TestFlowHangingIndentWrapsContinuationLinesInsideIndentedWidth(t *testing.T) {
+	doc := NewPDF("180pt x 240pt")
+	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := doc.BindFontRole(FontRoleBody, "Body"); err != nil {
+		t.Fatal(err)
+	}
+	doc.SetCompression(false)
+	flow, err := NewFlow(NewContext(&doc), PageSpec{
+		Width: 180, Height: 240,
+		MarginTop: 20, MarginRight: 20, MarginBottom: 20, MarginLeft: 20,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	style := ParagraphStyle{LineHeight: 13, LeftIndent: 18, FirstLineIndent: -18}
+	runs := []TextRun{{
+		Text:  "10. A numbered item long enough to wrap over several continuation lines without returning below its marker.",
+		Style: TextStyle{FontRole: FontRoleBody, FontSize: 10},
+	}}
+	lines := flow.breakLines(runs, style)
+	if err := flow.Error(); err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) < 2 {
+		t.Fatalf("got %d lines, want wrapping", len(lines))
+	}
+	for i, line := range lines {
+		limit := flow.body.Width - style.LeftIndent
+		if i == 0 {
+			limit -= style.FirstLineIndent
+		}
+		if line.width > limit+0.001 {
+			t.Fatalf("line %d width %.3f exceeds %.3f", i, line.width, limit)
+		}
+	}
+
+	flow.DrawParagraph(runs, style)
+	if err := flow.Error(); err != nil {
+		t.Fatal(err)
+	}
+	content := doc.pages[0].content.String()
+	if !strings.Contains(content, "BT 20 ") {
+		t.Fatalf("first line does not start at the body edge:\n%s", content)
+	}
+	if !strings.Contains(content, "BT 38 ") {
+		t.Fatalf("continuation line does not start at the hanging indent:\n%s", content)
+	}
+}
+
+func TestFlowRejectsInvalidParagraphIndents(t *testing.T) {
+	tests := []ParagraphStyle{
+		{LeftIndent: -1},
+		{LeftIndent: 80},
+		{LeftIndent: 10, FirstLineIndent: -11},
+		{LeftIndent: 70, FirstLineIndent: 10},
+	}
+	for _, style := range tests {
+		doc := NewPDF("100pt x 100pt")
+		flow, err := NewFlow(NewContext(&doc), PageSpec{
+			Width: 100, Height: 100,
+			MarginTop: 10, MarginRight: 10, MarginBottom: 10, MarginLeft: 10,
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		flow.DrawParagraph([]TextRun{{Text: "invalid"}}, style)
+		if err := flow.Error(); err == nil || !strings.Contains(err.Error(), "invalid paragraph geometry") {
+			t.Fatalf("style %+v error = %v", style, err)
+		}
+	}
+}
+
 func TestFlowAutomaticAndExplicitPaginationDecoratesEveryPage(t *testing.T) {
 	doc := NewPDF("200pt x 150pt")
 	doc.SetCompression(false)
