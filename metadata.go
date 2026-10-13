@@ -12,6 +12,12 @@ func (p *PDF) DocCreator() string { p.init(); return p.docCreator }
 // SetDocCreator sets the optional 'document creator' metadata property.
 func (p *PDF) SetDocCreator(s string) *PDF { p.docCreator = s; return p }
 
+// DocProducer returns the optional 'document producer' metadata property.
+func (p *PDF) DocProducer() string { p.init(); return p.docProducer }
+
+// SetDocProducer sets the optional 'document producer' metadata property.
+func (p *PDF) SetDocProducer(s string) *PDF { p.docProducer = s; return p }
+
 // DocKeywords returns the optional 'document keywords' metadata property.
 func (p *PDF) DocKeywords() string { p.init(); return p.docKeywords }
 

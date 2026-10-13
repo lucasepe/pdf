@@ -61,7 +61,7 @@ func (p *PDF) buildBytes() ([]byte, error) {
 
 	p.reservePage()
 	hasInfo := p.docTitle != "" || p.docSubject != "" ||
-		p.docKeywords != "" || p.docAuthor != "" || p.docCreator != ""
+		p.docKeywords != "" || p.docAuthor != "" || p.docCreator != "" || p.docProducer != ""
 	fontObjectCounts := make([]int, len(p.fonts))
 	for i, font := range p.fonts {
 		fontObjectCounts[i] = 1
@@ -138,7 +138,7 @@ func (p *PDF) buildBytes() ([]byte, error) {
 		for _, tuple := range [][]string{
 			{"/Title ", p.docTitle}, {"/Subject ", p.docSubject},
 			{"/Keywords ", p.docKeywords}, {"/Author ", p.docAuthor},
-			{"/Creator ", p.docCreator},
+			{"/Creator ", p.docCreator}, {"/Producer ", p.docProducer},
 		} {
 			if tuple[1] != "" {
 				encoded, err := encodePDFDoc(tuple[1])

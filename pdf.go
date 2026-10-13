@@ -38,7 +38,7 @@ type PDF struct {
 	isInit          bool         // has the PDF been initialized?
 	//
 	// document metadata fields
-	docAuthor, docCreator, docKeywords, docSubject, docTitle string
+	docAuthor, docCreator, docKeywords, docProducer, docSubject, docTitle string
 } //                                                                         PDF
 
 // NewPDF creates and initializes a new PDF object. Specify paperSize as:

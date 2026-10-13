@@ -1,6 +1,9 @@
 package pdf
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 // Test_PDF_DocAuthor_ is the unit test for
 func Test_PDF_DocAuthor_(t *testing.T) {
@@ -110,6 +113,20 @@ func Test_PDF_DocCreator_(t *testing.T) {
 		`
 		pdfCompare(t, doc.Bytes(), want)
 	}()
+}
+
+func Test_PDF_DocProducer_(t *testing.T) {
+	var doc PDF
+	if got := doc.DocProducer(); got != "" {
+		t.Fatalf("default producer = %q, want empty", got)
+	}
+	if got := doc.SetDocProducer("ebookgen by Luca Sepe").DocProducer(); got != "ebookgen by Luca Sepe" {
+		t.Fatalf("producer = %q", got)
+	}
+	data := doc.SetCompression(false).Bytes()
+	if !bytes.Contains(data, []byte("/Producer (ebookgen by Luca Sepe)")) {
+		t.Fatalf("serialized PDF does not contain Producer metadata:\n%s", data)
+	}
 }
 
 // Test_PDF_DocKeywords_ is the unit test for
