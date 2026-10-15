@@ -42,6 +42,7 @@ type pdfTTFont struct {
 	italicAngle     int32
 	weight          uint16
 	fixedPitch      bool
+	noSubsetting    bool
 	numGlyphs       uint16
 	widths          []uint16
 	cmap            map[rune]uint16
@@ -403,6 +404,7 @@ func (f *pdfTTFont) parseOS2() error {
 	if fsType&0x0002 != 0 || fsType&0x0200 != 0 {
 		return FontError{Kind: "embedding prohibited", Detail: fmt.Sprintf("OS/2 fsType 0x%04X", fsType)}
 	}
+	f.noSubsetting = fsType&0x0100 != 0
 	if len(os2) >= 74 {
 		f.ascent, f.descent = i16(os2, 68), i16(os2, 70)
 	}
@@ -478,8 +480,17 @@ func (f *pdfTTFont) writeFontObjects(ids []int) {
 		f.pdf.writeErr = FontError{Kind: "internal object plan", Detail: f.logicalName}
 		return
 	}
-	p := f.pdf
+	program := f.data
 	name := sanitizePDFName(f.pdfName)
+	if !f.noSubsetting {
+		var err error
+		program, name, err = f.subsetProgram()
+		if err != nil {
+			f.pdf.writeErr = err
+			return
+		}
+	}
+	p := f.pdf
 	p.beginObjAt(ids[0]).write("<</Type/Font/Subtype/Type0/BaseFont/", name, "/Encoding/Identity-H/DescendantFonts[", ids[1], " 0 R]/ToUnicode ", ids[5], " 0 R>>\nendobj\n\n")
 	p.beginObjAt(ids[1]).write("<</Type/Font/Subtype/CIDFontType2/BaseFont/", name, "/CIDSystemInfo<</Registry(Adobe)/Ordering(Identity)/Supplement 0>>/FontDescriptor ", ids[2], " 0 R/DW 1000/W[")
 	cids := f.sortedCIDs()
@@ -495,7 +506,7 @@ func (f *pdfTTFont) writeFontObjects(ids []int) {
 		flags |= 64
 	}
 	p.beginObjAt(ids[2]).write("<</Type/FontDescriptor/FontName/", name, "/Flags ", flags, "/FontBBox[", f.pdfMetric(f.xMin), " ", f.pdfMetric(f.yMin), " ", f.pdfMetric(f.xMax), " ", f.pdfMetric(f.yMax), "]/ItalicAngle ", pdfNumber(float64(f.italicAngle)/65536), "/Ascent ", f.pdfMetric(f.ascent), "/Descent ", f.pdfMetric(f.descent), "/CapHeight ", f.pdfMetric(f.capHeight), "/StemV ", stemV(f.weight), "/FontFile2 ", ids[3], " 0 R>>\nendobj\n\n")
-	p.beginObjAt(ids[3]).write("<</Length1 ", len(f.data)).writeStreamData(f.data).write("\nendobj\n\n")
+	p.beginObjAt(ids[3]).write("<</Length1 ", len(program)).writeStreamData(program).write("\nendobj\n\n")
 	gids := make([]byte, (len(cids)+1)*2)
 	for _, cid := range cids {
 		binary.BigEndian.PutUint16(gids[int(cid)*2:], f.cidToGID[cid])

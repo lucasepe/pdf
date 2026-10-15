@@ -69,6 +69,117 @@ func TestEmbeddedFontReusedAcrossPages(t *testing.T) {
 	validateXRefOffsets(t, out)
 }
 
+func TestEmbeddedFontSubsetsUsedGlyphs(t *testing.T) {
+	data := loadVera(t)
+	doc := NewPDF("A4")
+	if err := doc.RegisterFont("Body", data); err != nil {
+		t.Fatal(err)
+	}
+	doc.SetFont("Body", 12).DrawText("Subset é")
+	font := doc.registeredFonts["BODY"]
+	subset, name, err := font.subsetProgram()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(subset) >= len(data)/2 {
+		t.Fatalf("subset size = %d; original = %d", len(subset), len(data))
+	}
+	if len(name) < 8 || name[6] != '+' {
+		t.Fatalf("invalid subset font name %q", name)
+	}
+	if got := sfntChecksum(subset); got != 0xB1B0AFBA {
+		t.Fatalf("subset sfnt checksum = %08x", got)
+	}
+	parsed, err := parseTrueType(subset)
+	if err != nil {
+		t.Fatalf("subset is not a valid TrueType font: %v", err)
+	}
+	if parsed.numGlyphs != font.numGlyphs {
+		t.Fatalf("glyph count changed from %d to %d", font.numGlyphs, parsed.numGlyphs)
+	}
+	originalLoca, _ := font.table("loca", 0)
+	originalGlyf, _ := font.table("glyf", 0)
+	subsetLoca, _ := parsed.table("loca", 0)
+	subsetGlyf, _ := parsed.table("glyf", 0)
+	originalLong := i16(data[int(font.tables["head"].offset):], 50) == 1
+	for _, gid := range font.cidToGID {
+		start, end := glyphOffsets(originalLoca, gid, originalLong)
+		subStart, subEnd := glyphOffsets(subsetLoca, gid, true)
+		if subEnd-subStart < end-start || !bytes.Equal(originalGlyf[start:end], subsetGlyf[subStart:subStart+end-start]) {
+			t.Fatalf("used glyph %d was not preserved", gid)
+		}
+	}
+}
+
+func TestEmbeddedFontSubsetIncludesCompositeComponents(t *testing.T) {
+	font, err := parseTrueType(loadVera(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loca, _ := font.table("loca", 0)
+	glyf, _ := font.table("glyf", 0)
+	head, _ := font.table("head", 54)
+	long := i16(head, 50) == 1
+	var target rune
+	var component uint16
+	for r, gid := range font.cmap {
+		if _, ok := winAnsiByte(r); !ok {
+			continue
+		}
+		start, end := glyphOffsets(loca, gid, long)
+		if end-start >= 14 && i16(glyf[start:], 0) < 0 {
+			target, component = r, u16(glyf[start:], 12)
+			break
+		}
+	}
+	if target == 0 {
+		t.Skip("fixture has no WinAnsi composite glyph")
+	}
+	if _, err := font.encodeRun(string(target)); err != nil {
+		t.Fatal(err)
+	}
+	subset, _, err := font.subsetProgram()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parseTrueType(subset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subLoca, _ := parsed.table("loca", 0)
+	subGlyf, _ := parsed.table("glyf", 0)
+	start, end := glyphOffsets(subLoca, component, true)
+	if start == end {
+		t.Fatalf("component glyph %d of %q was omitted", component, target)
+	}
+	originalStart, originalEnd := glyphOffsets(loca, component, long)
+	if !bytes.Equal(subGlyf[start:start+originalEnd-originalStart], glyf[originalStart:originalEnd]) {
+		t.Fatalf("component glyph %d of %q was changed", component, target)
+	}
+}
+
+func TestEmbeddedFontRespectsNoSubsettingPermission(t *testing.T) {
+	data := loadVera(t)
+	tables, err := fontDirectory(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os2 := tables["OS/2"]
+	data[int(os2.offset)+8], data[int(os2.offset)+9] = 0x01, 0x00
+	doc := NewPDF("A4")
+	if err := doc.RegisterFont("NoSubset", data); err != nil {
+		t.Fatal(err)
+	}
+	doc.SetFont("NoSubset", 12).DrawText("Hello")
+	output := doc.Bytes()
+	if !bytes.Contains(output, []byte("/BaseFont/BitstreamVeraSans-Roman")) {
+		t.Fatal("no-subsetting font was given a subset name")
+	}
+	if !bytes.Contains(output, []byte(fmt.Sprintf("/Length1 %d", len(data)))) {
+		t.Fatal("no-subsetting font program was shortened")
+	}
+}
+
 func TestEmbeddedFontRejectsUnsupportedText(t *testing.T) {
 	doc := NewPDF("A4")
 	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {

@@ -11,7 +11,7 @@ required.
 - A top left, point-based drawing context with paths, curves, clipping and affine transforms.
 - Automatic paragraph wrapping, multi page flow, tables, image groups and
   direct ASCII diagrams.
-- Embedded static TrueType fonts with metrics, CID mapping and searchable
+- Embedded static TrueType font subsets with metrics, CID mapping and searchable
   `ToUnicode` text.
 - UTF-8 input for an explicit Western European Latin repertoire, with precise errors for unsupported runes.
 - Transparent raster images, JPEG passthrough and provider backed inline emoji.
@@ -100,6 +100,9 @@ doc.SetFont("Body", 11).DrawText("Perché l’unità è già pronta — € 12,5
 The first embedding path accepts static TTF/OpenType fonts containing
 TrueType `glyf`/`loca` outlines. Unsupported formats and fonts whose embedding
 permissions prohibit use return `FontError`.
+Only the outlines used by a document (including composite glyph components)
+are embedded. Fonts with the `OS/2` no-subsetting permission bit are embedded
+in full.
 
 Semantic font roles keep document styling independent from physical files.
 Body roles must be bound to registered embedded faces. Monospace roles default
