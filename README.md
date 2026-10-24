@@ -236,6 +236,11 @@ are atomic and the optional header is repeated after every automatic page
 break. This maps directly onto a Markdown table AST without making the PDF
 library depend on a Markdown parser:
 
+Cells preserve `TextRun.URI` and `TextRun.LinkDestination`: linked text gets
+clickable annotations at its rendered position, including wrapped lines,
+center/right alignment, and headers repeated on new pages. Plain text in the
+same cell remains unlinked. Internal destinations can be declared later.
+
 ```go
 body := pdf.TextStyle{FontName: "Helvetica", FontSize: 9}
 table := pdf.Table{

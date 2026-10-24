@@ -482,6 +482,18 @@ func (f *Flow) drawTableRow(row tableRowLayout, widths []float64, columns []Tabl
 					f.fail("draw table", err.Error())
 					return
 				}
+				if token.width > 0 && token.text != "" {
+					rect := Rect{X: lineX, Y: lineY, Width: token.width, Height: line.height}
+					if token.uri != "" {
+						f.context.AddExternalLink(token.uri, rect)
+					} else if token.target != "" {
+						f.context.AddInternalLink(token.target, rect)
+					}
+					if err := f.context.Error(); err != nil {
+						f.fail("draw table link", err.Error())
+						return
+					}
+				}
 				lineX += token.width
 			}
 			lineY += line.height
