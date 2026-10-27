@@ -129,6 +129,7 @@ const (
 //
 // LeftIndent moves every line in from the body's left edge. FirstLineIndent is
 // an additional offset applied only to the first line and may be negative. A
+// RightIndent reserves space at the right edge for every line. A
 // hanging indent therefore uses a positive LeftIndent and the corresponding
 // negative FirstLineIndent.
 type ParagraphStyle struct {
@@ -136,6 +137,7 @@ type ParagraphStyle struct {
 	LineHeight              float64
 	SpaceBefore, SpaceAfter float64
 	LeftIndent              float64
+	RightIndent             float64
 	FirstLineIndent         float64
 }
 
@@ -363,7 +365,7 @@ func (f *Flow) DrawParagraph(runs []TextRun, style ParagraphStyle) *Flow {
 		if i == 0 {
 			indent += style.FirstLineIndent
 		}
-		available := f.body.Width - indent
+		available := f.body.Width - indent - style.RightIndent
 		x := f.body.X + indent
 		switch style.Align {
 		case AlignCenter:
@@ -413,13 +415,13 @@ func (f *Flow) breakLines(runs []TextRun, paragraph ParagraphStyle) []flowLine {
 
 func validParagraphStyle(style ParagraphStyle, width float64) bool {
 	if style.Align > AlignRight ||
-		!finite(style.LineHeight, style.SpaceBefore, style.SpaceAfter, style.LeftIndent, style.FirstLineIndent) ||
+		!finite(style.LineHeight, style.SpaceBefore, style.SpaceAfter, style.LeftIndent, style.RightIndent, style.FirstLineIndent) ||
 		style.LineHeight < 0 || style.SpaceBefore < 0 || style.SpaceAfter < 0 ||
-		style.LeftIndent < 0 || style.LeftIndent >= width {
+		style.LeftIndent < 0 || style.RightIndent < 0 || style.LeftIndent+style.RightIndent >= width {
 		return false
 	}
 	firstIndent := style.LeftIndent + style.FirstLineIndent
-	return firstIndent >= 0 && firstIndent < width
+	return firstIndent >= 0 && firstIndent+style.RightIndent < width
 }
 
 func paragraphLineWidth(width float64, paragraph ParagraphStyle, first bool) float64 {
@@ -427,7 +429,7 @@ func paragraphLineWidth(width float64, paragraph ParagraphStyle, first bool) flo
 	if first {
 		indent += paragraph.FirstLineIndent
 	}
-	return width - indent
+	return width - indent - paragraph.RightIndent
 }
 
 func (f *Flow) breakLinesWidth(runs []TextRun, paragraph ParagraphStyle, width float64) []flowLine {
