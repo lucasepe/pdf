@@ -429,7 +429,9 @@ func (f *pdfTTFont) encodeRun(s string) ([]uint16, error) {
 	out := make([]uint16, 0, len(s))
 	runeIndex := 0
 	for byteOffset, r := range s {
-		if _, ok := winAnsiByte(r); !ok {
+		// Embedded fonts already use CIDs. Allow Greek capital delta when
+		// the selected font maps it to a glyph.
+		if _, ok := winAnsiByte(r); !ok && r != 'Δ' {
 			return nil, TextEncodingError{Encoding: "embedded Latin", Font: f.logicalName, Rune: r, ByteOffset: byteOffset, RuneIndex: runeIndex}
 		}
 		gid, ok := f.cmap[r]

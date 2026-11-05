@@ -180,6 +180,33 @@ func TestEmbeddedFontRespectsNoSubsettingPermission(t *testing.T) {
 	}
 }
 
+func TestEmbeddedFontEncodesGreekCapitalDelta(t *testing.T) {
+	doc := NewPDF("A4")
+	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
+		t.Fatal(err)
+	}
+	font := doc.registeredFonts["BODY"]
+	// Vera has the increment symbol but no capital delta. Give the
+	// test font an explicit cmap entry to exercise the embedded path.
+	gid := font.cmap['∆']
+	if gid == 0 {
+		t.Fatal("test fixture has no increment glyph")
+	}
+	font.cmap['Δ'] = gid
+
+	doc.SetCompression(false).SetFont("Body", 12)
+	if width := doc.TextWidth("Δ"); width <= 0 {
+		t.Fatalf("delta width = %v", width)
+	}
+	doc.SetXY(40, 60).DrawText("Δ")
+	if errs := doc.Errors(); len(errs) != 0 {
+		t.Fatalf("drawing delta: %v", errs)
+	}
+	if out := doc.Bytes(); !bytes.Contains(out, []byte("<0001> <0394>")) {
+		t.Fatal("ToUnicode does not map the delta glyph to U+0394")
+	}
+}
+
 func TestEmbeddedFontRejectsUnsupportedText(t *testing.T) {
 	doc := NewPDF("A4")
 	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
