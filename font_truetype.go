@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 const maxFontSize = 64 << 20
@@ -298,12 +299,16 @@ func (f *pdfTTFont) parseCmap12(table []byte) error {
 	for i := 0; i < groups; i++ {
 		pos := 16 + i*12
 		start, end, gid := u32(table, pos), u32(table, pos+4), u32(table, pos+8)
-		if end < start || end-start > 1<<20 {
+		if end < start || end > utf8.MaxRune {
 			return FontError{Kind: "malformed", Detail: "invalid cmap group"}
 		}
-		for cp := start; cp <= end && cp <= 0xffff; cp++ {
+		if gid >= uint32(f.numGlyphs) {
+			continue
+		}
+		end = min(end, start+uint32(f.numGlyphs)-gid-1)
+		for cp := start; cp <= end; cp++ {
 			g := gid + (cp - start)
-			if g < uint32(f.numGlyphs) && g != 0 {
+			if g != 0 {
 				f.cmap[rune(cp)] = uint16(g)
 			}
 		}
@@ -427,15 +432,13 @@ func (f *pdfTTFont) parsePost() {
 
 func (f *pdfTTFont) encodeRun(s string) ([]uint16, error) {
 	out := make([]uint16, 0, len(s))
-	runeIndex := 0
-	for byteOffset, r := range s {
-		// Embedded fonts already use CIDs. Allow Greek capital delta when
-		// the selected font maps it to a glyph.
-		if _, ok := winAnsiByte(r); !ok && r != 'Δ' {
-			return nil, TextEncodingError{Encoding: "embedded Latin", Font: f.logicalName, Rune: r, ByteOffset: byteOffset, RuneIndex: runeIndex}
+	for byteOffset, runeIndex := 0, 0; byteOffset < len(s); runeIndex++ {
+		r, size := utf8.DecodeRuneInString(s[byteOffset:])
+		if r == utf8.RuneError && size == 1 {
+			return nil, TextEncodingError{Encoding: "UTF-8", Font: f.logicalName, Rune: r, ByteOffset: byteOffset, RuneIndex: runeIndex}
 		}
-		gid, ok := f.cmap[r]
-		if !ok || gid == 0 {
+		gid := f.cmap[r]
+		if gid == 0 {
 			return nil, TextEncodingError{Encoding: "font cmap", Font: f.logicalName, Rune: r, ByteOffset: byteOffset, RuneIndex: runeIndex}
 		}
 		cid, ok := f.runeToCID[r]
@@ -447,7 +450,7 @@ func (f *pdfTTFont) encodeRun(s string) ([]uint16, error) {
 			f.runeToCID[r], f.cidToRune[cid], f.cidToGID[cid] = cid, r, gid
 		}
 		out = append(out, cid)
-		runeIndex++
+		byteOffset += size
 	}
 	return out, nil
 }

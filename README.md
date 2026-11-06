@@ -13,7 +13,8 @@ required.
   direct ASCII diagrams.
 - Embedded static TrueType font subsets with metrics, CID mapping and searchable
   `ToUnicode` text.
-- UTF-8 input for a Western European Latin repertoire. Embedded TrueType fonts also support Greek capital delta (Δ, U+0394) when the font contains its glyph.
+- UTF-8 input. Embedded TrueType fonts map Unicode characters to glyphs using
+  the font's Unicode cmap (format 4 or 12). Built-in Latin fonts use WinAnsi.
 - Transparent raster images, JPEG passthrough and provider backed inline emoji.
 - Internal destinations, clickable URI links, metadata, page decorators and mirrored binding margins.
 - Built-in PDF fonts, 144 named colors, HTML/RGB colors, configurable units, metadata and optional stream compression.
@@ -21,7 +22,7 @@ required.
 
 ## Not yet supported
 
-- General Unicode text, including complex-script shaping and bidirectional layout
+- Complex-script shaping and bidirectional layout
 - CFF/CFF2, variable, collection, WOFF/WOFF2, and color-font embedding
 - PDF encryption
 

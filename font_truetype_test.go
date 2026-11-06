@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -180,7 +181,7 @@ func TestEmbeddedFontRespectsNoSubsettingPermission(t *testing.T) {
 	}
 }
 
-func TestEmbeddedFontEncodesGreekCapitalDelta(t *testing.T) {
+func TestEmbeddedFontEncodesMappedCharacters(t *testing.T) {
 	doc := NewPDF("A4")
 	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
 		t.Fatal(err)
@@ -194,16 +195,49 @@ func TestEmbeddedFontEncodesGreekCapitalDelta(t *testing.T) {
 	}
 	font.cmap['Δ'] = gid
 
+	const condition = "Δ ≥ 0, π ≤ 4"
 	doc.SetCompression(false).SetFont("Body", 12)
-	if width := doc.TextWidth("Δ"); width <= 0 {
-		t.Fatalf("delta width = %v", width)
+	if width := doc.TextWidth(condition); width <= 0 {
+		t.Fatalf("condition width = %v", width)
 	}
-	doc.SetXY(40, 60).DrawText("Δ")
+	doc.SetXY(40, 60).DrawText(condition)
 	if errs := doc.Errors(); len(errs) != 0 {
-		t.Fatalf("drawing delta: %v", errs)
+		t.Fatalf("drawing condition: %v", errs)
 	}
-	if out := doc.Bytes(); !bytes.Contains(out, []byte("<0001> <0394>")) {
-		t.Fatal("ToUnicode does not map the delta glyph to U+0394")
+	out := doc.Bytes()
+	for _, mapping := range []string{"<0001> <0394>", "<0003> <2265>", "<0006> <03C0>", "<0007> <2264>"} {
+		if !bytes.Contains(out, []byte(mapping)) {
+			t.Errorf("ToUnicode is missing %s", mapping)
+		}
+	}
+}
+
+func TestEmbeddedFontEncodesSupplementaryCharacter(t *testing.T) {
+	doc := NewPDF("A4")
+	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
+		t.Fatal(err)
+	}
+	font := doc.registeredFonts["BODY"]
+	const character = '𝛑'
+	// Give the fixture a format 12 group mapping the supplementary character
+	// to its existing pi glyph.
+	cmap := make([]byte, 28)
+	binary.BigEndian.PutUint16(cmap, 12)
+	binary.BigEndian.PutUint32(cmap[4:], uint32(len(cmap)))
+	binary.BigEndian.PutUint32(cmap[12:], 1)
+	binary.BigEndian.PutUint32(cmap[16:], character)
+	binary.BigEndian.PutUint32(cmap[20:], character)
+	binary.BigEndian.PutUint32(cmap[24:], uint32(font.cmap['π']))
+	if err := font.parseCmap12(cmap); err != nil {
+		t.Fatal(err)
+	}
+
+	doc.SetCompression(false).SetFont("Body", 12).DrawText(string(character))
+	if errs := doc.Errors(); len(errs) != 0 {
+		t.Fatalf("drawing supplementary character: %v", errs)
+	}
+	if !bytes.Contains(doc.Bytes(), []byte("<0001> <D835DED1>")) {
+		t.Fatalf("ToUnicode is missing the surrogate pair for %U", character)
 	}
 }
 
@@ -212,17 +246,31 @@ func TestEmbeddedFontRejectsUnsupportedText(t *testing.T) {
 	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
 		t.Fatal(err)
 	}
-	doc.SetFont("Body", 12).DrawText("Latin Ж")
+	doc.SetFont("Body", 12).DrawText("é Ж")
 	var target TextEncodingError
 	for _, err := range doc.Errors() {
 		if errors.As(err, &target) {
-			if target.Rune != 'Ж' || target.Font != "Body" {
+			if target != (TextEncodingError{Encoding: "font cmap", Font: "Body", Rune: 'Ж', ByteOffset: 3, RuneIndex: 2}) {
 				t.Fatalf("unexpected encoding error: %+v", target)
 			}
 			return
 		}
 	}
 	t.Fatalf("TextEncodingError not found in %v", doc.Errors())
+}
+
+func TestEmbeddedFontRejectsMalformedUTF8(t *testing.T) {
+	doc := NewPDF("A4")
+	if err := doc.RegisterFont("Body", loadVera(t)); err != nil {
+		t.Fatal(err)
+	}
+	font := doc.registeredFonts["BODY"]
+	font.cmap['�'] = font.cmap['?']
+	_, err := font.encodeRun("é\xff")
+	want := TextEncodingError{Encoding: "UTF-8", Font: "Body", Rune: '�', ByteOffset: 2, RuneIndex: 1}
+	if err != want {
+		t.Fatalf("malformed UTF-8 error = %v, want %v", err, want)
+	}
 }
 
 func TestRegisterFontRejectsUnsupportedAndRestrictedFonts(t *testing.T) {
